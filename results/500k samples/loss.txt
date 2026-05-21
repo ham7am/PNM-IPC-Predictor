@@ -1,0 +1,10 @@
+Epoch   1 | Train Loss: 0.010381 | Test Loss:  0.005746
+Epoch   2 | Train Loss: 0.005381 | Test Loss:  0.004643
+Epoch   3 | Train Loss: 0.004720 | Test Loss:  0.004477
+Epoch   4 | Train Loss: 0.004381 | Test Loss:  0.004259
+Epoch   5 | Train Loss: 0.004101 | Test Loss:  0.004194
+Epoch   6 | Train Loss: 0.003921 | Test Loss:  0.003739
+Epoch   7 | Train Loss: 0.003734 | Test Loss:  0.003678
+Epoch   8 | Train Loss: 0.003649 | Test Loss:  0.003736
+Epoch   9 | Train Loss: 0.003566 | Test Loss:  0.003491
+Epoch  10 | Train Loss: 0.003479 | Test Loss:  0.003968

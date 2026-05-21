@@ -76,7 +76,7 @@ def generate_data(size: int):
     return X,Y
 
 if __name__ == '__main__':
-    n = 100000
+    n = 500000
     X, Y = generate_data(size=3)
 
     Xs = np.zeros((n, *X.shape))
