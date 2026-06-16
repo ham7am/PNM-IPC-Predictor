@@ -1,6 +1,40 @@
+# ── Python / editor / OS ───────────────────────────────────────────────
 __pycache__/
-.vscode/
-data/
 *.pyc
+.vscode/
 .DS_Store
-*.npz
+
+# ── Legacy scripts (kept on disk for reference, no longer tracked) ───────
+cnn_encoder.py
+cnn_encoder_dual_channel.py
+cnn_decoder_dual_channel.py
+cnn_decoder_dc_pred.py
+cnn_vae_decoder_dc_pred.py
+evaluate_vae_decoder.py
+
+# ── Archives ─────────────────────────────────────────────────────────────
+*.zip
+
+# ── Data ─────────────────────────────────────────────────────────────────
+# Ignore everything in data/. A smaller dataset could be re-included and
+# tracked via LFS (see .gitattributes), but the 10x10 training set is 3.5 GB,
+# over GitHub's 2 GB per-file LFS limit, so it is distributed out-of-band.
+data/*
+!data/*.npz
+data/networks.npz
+data/ipc.npz
+data/10_10_1_training_data.npz
+/training_data.npz
+
+# ── Results ──────────────────────────────────────────────────────────────
+# Derived images, text, and prediction arrays are not tracked.
+# Small *_stats.npz (needed by eval) and active *.pth weights ARE tracked.
+results/**/*.png
+results/**/*.txt
+results/**/*_predictions.npz
+results/**/comparison_results.npz
+results/**/predictions.npz
+
+# Legacy weights (belong to the legacy scripts above)
+results/decoder_model.pth
+results/vae_decoder_model.pth

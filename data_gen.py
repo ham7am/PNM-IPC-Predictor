@@ -77,7 +77,7 @@ def generate_data(size: int):
 
 if __name__ == '__main__':
     n = 500000
-    X, Y = generate_data(size=3)
+    X, Y = generate_data(size=10)
 
     Xs = np.zeros((n, *X.shape))
     Ys = np.zeros((n, *Y.shape))
@@ -85,12 +85,12 @@ if __name__ == '__main__':
     Ys[0] = Y
 
     # Generate remaining samples in parallel
-    results = Parallel(n_jobs=-1, verbose=10)(delayed(generate_data)(size=3) for _ in range(1, n))
+    results = Parallel(n_jobs=-1, return_as='generator', verbose=100)(delayed(generate_data)(size=10) for _ in range(1, n))
 
     for i, (X, Y) in enumerate(results, start=1):
         Xs[i] = X
         Ys[i] = Y
 
     print(f"All {n} samples generated. Saving...")
-    np.savez('training_data.npz', X=Xs, Y=Ys)
+    np.savez('./data/10_10_1_training_data.npz', X=Xs, Y=Ys)
     print("Training data saved to training_data.npz")

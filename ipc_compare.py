@@ -2,6 +2,64 @@ import openpnm as op
 import numpy as np
 import matplotlib.pyplot as plt
 
+def make_pn_run_pn(Np):
+    pn = op.network.Demo(shape=[Np, Np, 1], spacing=1e-4)
+    air_test = op.phase.Air(network=pn)
+    air_test['pore.contact_angle'] = 120
+    air_test['pore.surface_tension'] = 0.072
+    air_test.add_model(propname='throat.entry_pressure', model=op.models.physics.capillary_pressure.washburn,
+                       surface_tension='throat.surface_tension',
+                       contact_angle='throat.contact_angle',
+                       diameter='throat.diameter') 
+    ip_test = op.algorithms.InvasionPercolation(network=pn, phase=air_test)
+    ip_test.set_inlet_BC(pores=pn.pores('left'))
+    ip_test.run()
+    data_test = ip_test.pc_curve()
+    
+    plt.figure()
+    plt.plot(data_test.pc, data_test.snwp, 'b-')
+    plt.xlabel('Capillary Pressure (Pa)')
+    plt.ylabel('Non-wetting Phase Saturation')
+    plt.title('Invasion Percolation Curve')
+    plt.grid(True)
+    plt.show()
+    return pn
+    
+def split_network_matrix(matrix, Np):
+    """
+    Split a merged network matrix into separate pore and throat matrices.
+    
+    Parameters
+    ----------
+    matrix : np.ndarray, shape (2*Np-1, 2*Np-1)
+        Merged matrix with pores at even-even and throats at odd-even/even-odd
+    Np : int
+        Number of pores along one side
+    
+    Returns
+    -------
+    pore_matrix : np.ndarray, shape (2*Np-1, 2*Np-1)
+        Matrix with only pore diameters at even-even positions, rest zeros
+    throat_matrix : np.ndarray, shape (2*Np-1, 2*Np-1)
+        Matrix with only throat diameters at odd-even/even-odd positions, rest zeros
+    """
+    size = 2 * Np - 1
+    pore_matrix = np.zeros((size, size))
+    throat_matrix = np.zeros((size, size))
+    
+    # Extract pores (even-even positions)
+    for i in range(Np):
+        for j in range(Np):
+            pore_matrix[2*i, 2*j] = matrix[2*i, 2*j]
+    
+    # Extract throats (odd-even and even-odd positions)
+    for i in range(size):
+        for j in range(size):
+            if (i % 2) != (j % 2):  # One even, one odd
+                throat_matrix[i, j] = matrix[i, j]
+    
+    return pore_matrix, throat_matrix
+
 def build_network_object(matrices, Np: int, spacing=1e-4):
     """
     Reconstruct an OpenPNM network object from encoded matrices with spacing.
@@ -67,91 +125,15 @@ def build_network_object(matrices, Np: int, spacing=1e-4):
                 throat_diameters.append(throat_matrix[2*i + 1, 2*j])
     
     # Create OpenPNM network
-    pn = op.network.Demo(shape=[Np, Np, 1], spacing=spacing)
+    pn = op.network.Cubic(shape=[Np, Np, 1], spacing=spacing)
+    
+    mods = op.models.collections.geometry.spheres_and_cylinders
+    pn.add_model_collection(mods)
     pn['pore.diameter'] = np.array(pore_diameters)
     pn['throat.conns'] = np.array(throat_conns)
     pn['throat.diameter'] = np.array(throat_diameters)
     pn['pore.coords'] = np.array(pore_coords)
-    
-    return pn
-
-def build_network_from_original(matrices, Np: int, original_pn):
-    """
-    Reconstruct an OpenPNM network by copying all properties from original network.
-    
-    Extracts pore and throat diameters from matrices, but copies coordinates,
-    connectivity, and other properties from the original network to ensure
-    exact geometric equivalence.
-    
-    Parameters
-    ----------
-    matrices : tuple/list of (np.ndarray, np.ndarray)
-        First matrix contains pore diameters at even-even positions.
-        Second matrix contains throat diameters at even-odd/odd-even positions.
-    Np : int
-        Number of pores along one side (3 for a 3×3 network).
-    original_pn : openpnm.network.Network
-        Original network to copy coordinates and connectivity from.
-    
-    Returns
-    -------
-    pn : openpnm.network.Network
-        Network object with all properties matching original network.
-    """
-    if isinstance(matrices, (list, tuple)) and len(matrices) == 2:
-        pore_matrix, throat_matrix = matrices
-    elif isinstance(matrices, np.ndarray):
-        pore_matrix = matrices
-        throat_matrix = matrices
-    else:
-        raise ValueError("Expected tuple/list of 2 matrices or single merged matrix")
-    
-    # Extract pore diameters from even-even positions
-    pore_diameters = []
-    for i in range(Np):
-        for j in range(Np):
-            pore_diameters.append(pore_matrix[2*i, 2*j])
-    
-    # Build throat connectivity (standard 3D lattice, confined to 2D)
-    throat_conns = []
-    throat_diameters = []
-    
-    for i in range(Np):
-        for j in range(Np):
-            p_idx = i * Np + j
-            
-            # Right neighbor (moves to j+1)
-            if j < Np - 1:
-                p_next = i * Np + (j + 1)
-                throat_conns.append([p_idx, p_next])
-                throat_diameters.append(throat_matrix[2*i, 2*j + 1])
-            
-            # Bottom neighbor (moves to i+1)
-            if i < Np - 1:
-                p_next = (i + 1) * Np + j
-                throat_conns.append([p_idx, p_next])
-                throat_diameters.append(throat_matrix[2*i + 1, 2*j])
-    
-    # Reorder throat diameters to match original network's connectivity
-    orig_conns = original_pn['throat.conns']
-    rebuilt_dict = {}
-    for i, (p1, p2) in enumerate(throat_conns):
-        rebuilt_dict[(p1, p2)] = throat_diameters[i]
-        rebuilt_dict[(p2, p1)] = throat_diameters[i]
-    
-    reordered_diameters = []
-    for p1, p2 in orig_conns:
-        if (p1, p2) in rebuilt_dict:
-            reordered_diameters.append(rebuilt_dict[(p1, p2)])
-        else:
-            reordered_diameters.append(rebuilt_dict[(p2, p1)])
-    
-    # Create new network by copying original
-    pn = op.network.Demo(shape=[Np, Np, 1], spacing=1e-4)
-    pn['pore.diameter'] = np.array(pore_diameters)
-    pn['pore.coords'] = original_pn['pore.coords'].copy()
-    pn['throat.conns'] = original_pn['throat.conns'].copy()
-    pn['throat.diameter'] = np.array(reordered_diameters)
+    pn.regenerate_models(exclude=['pore.diameter', 'throat.diameter'])
     
     return pn
 
@@ -197,8 +179,7 @@ def build_network_matrix(pn: op.network.Network, Np: int):
     # Odd-odd positions stay 0 (already zero from np.zeros)
     return matrix
 
-def run_sim(Np: int):
-    pn = op.network.Demo(shape=[Np, Np, 1], spacing=1e-4)
+def run_pn(pn, Np: int):
     air_test = op.phase.Air(network=pn)
     air_test['pore.contact_angle'] = 120
     air_test['pore.surface_tension'] = 0.072
@@ -212,17 +193,18 @@ def run_sim(Np: int):
     data_test = ip_test.pc_curve()
     
     plt.figure()
-    plt.plot(data_test.pc, data_test.snwp, 'b-')
+    plt.plot(data_test.pc, data_test.snwp, 'r-')
     plt.xlabel('Capillary Pressure (Pa)')
     plt.ylabel('Non-wetting Phase Saturation')
-    plt.title('Invasion Percolation Curve')
+    plt.title('Invasion Percolation Curve (from Network Matrix)')
     plt.grid(True)
     plt.show()
-    return pn
-
-def run_sim_mat(pn, Np: int):
-    matrices = build_network_matrix(pn, Np)
-    pn_rebuild = build_network_from_original(matrices, Np, original_pn=pn)
+    
+def run_pn2(pn, Np: int):
+    mat = build_network_matrix(pn, Np)
+    pm, tm = split_network_matrix(mat, Np)
+    matrices = [pm, tm]
+    pn_rebuild = build_network_object(matrices, Np)
     
     air_test = op.phase.Air(network=pn_rebuild)
     air_test['pore.contact_angle'] = 120
@@ -241,26 +223,5 @@ def run_sim_mat(pn, Np: int):
     plt.xlabel('Capillary Pressure (Pa)')
     plt.ylabel('Non-wetting Phase Saturation')
     plt.title('Invasion Percolation Curve (from Network Matrix)')
-    plt.grid(True)
-    plt.show()
-    
-def run_sim_pn(pn, Np: int):
-    air_test = op.phase.Air(network=pn)
-    air_test['pore.contact_angle'] = 120
-    air_test['pore.surface_tension'] = 0.072
-    air_test.add_model(propname='throat.entry_pressure', model=op.models.physics.capillary_pressure.washburn,
-                       surface_tension='throat.surface_tension',
-                       contact_angle='throat.contact_angle',
-                       diameter='throat.diameter') 
-    ip_test = op.algorithms.InvasionPercolation(network=pn, phase=air_test)
-    ip_test.set_inlet_BC(pores=pn.pores('left'))
-    ip_test.run()
-    data_test = ip_test.pc_curve()
-    
-    plt.figure()
-    plt.plot(data_test.pc, data_test.snwp, 'r-')
-    plt.xlabel('Capillary Pressure (Pa)')
-    plt.ylabel('Non-wetting Phase Saturation')
-    plt.title('Invasion Percolation Curve')
     plt.grid(True)
     plt.show()

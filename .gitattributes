@@ -1,0 +1,5 @@
+# Large binaries tracked via Git LFS.
+# Training data — needed on the remote training server.
+data/*.npz filter=lfs diff=lfs merge=lfs -text
+# Model weights — change every training run; kept out of plain git history.
+*.pth filter=lfs diff=lfs merge=lfs -text
